@@ -1,0 +1,20 @@
+[project]
+name = "rag-pipeline"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "docling>=2.88.0",
+    "langchain>=1.2.15",
+    "langchain-classic>=1.0.3",
+    "langchain-google-genai>=4.2.1",
+    "langchain-huggingface>=1.2.1",
+    "langchain-qdrant>=1.1.0",
+    "langchain-text-splitters>=1.1.1",
+    "pillow>=11.1.0",
+    "python-dotenv>=1.2.2",
+    "qdrant-client>=1.17.1",
+    "sentence-transformers>=5.3.0",
+    "torchvision>=0.26.0",
+]
