@@ -34,4 +34,4 @@ uv add -r requirements.txt
 
 ### 4. make data directory
 mkdir data
-# Move FundamentalsofDeepLearning.pdf into the /data folder
+# Move *.pdf into the ./data folder
