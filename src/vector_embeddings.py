@@ -114,7 +114,7 @@ class QdrantManager:
 
     print(f"✅ Embeddings stored successfully in collection: {self.collection_name}")
     
-  def get_retriever(self):
+  def get_retriever(self, mode=cfg.RETRIEVAL_MODE):
     """Returns a retriever object so the LLM can search the DB. We have to use MMR Algorithms for searching better and get rid of issue: Retrival Diversity
     
     MMR: Max Marginal Relevance (MMR) is an algorithm used to select a subset of items from a larger set, such as documents from a collection, that are both relevant to a query and diverse from each other.
@@ -131,6 +131,10 @@ class QdrantManager:
       embedding=self.embeddings
     )
     
+    if mode == "advanced":
+      # Cast a wide net — the re-ranker will filter down to top 5
+      return qdrant_retriever.as_retriever(search_kwargs={"k": 30})
+
     # search_type="mmr" for diversity
     # fetch_k=30 means "grab the top 30 chunks first"
     # k=10 means "pick the 10 most diverse chunks out of that 30"

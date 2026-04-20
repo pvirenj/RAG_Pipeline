@@ -3,6 +3,11 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
 from langchain_classic.chains.retrieval import create_retrieval_chain
 from src.config import cfg
+# for Advance RAG
+from langchain_classic.retrievers.multi_query import MultiQueryRetriever
+from langchain_classic.retrievers import ContextualCompressionRetriever
+from langchain_classic.retrievers.document_compressors import CrossEncoderReranker
+from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 
 class RAGGeneration:
   def __init__(self, retriever):
@@ -27,8 +32,39 @@ class RAGGeneration:
     # Combine with Fallbacks
     self.llm = primary_llm.with_fallbacks([fallback_llm])
     print("✅ LLM with fallback mechanism ready")
+
+    # 1. Build the Advanced Retrieval Pipeline
+    self.advanced_retriever = self._build_advanced_retriever(self.retriever)
+
     self.qa_chain = self._build_chain()
 
+  def _build_advanced_retriever(self, base_retriever):
+    """Constructs the Multi-Query + Re-ranking Pipeline."""
+    print("⚙️ Building Advanced Retrieval Pipeline...")
+    # 1. Multi-Query Expansion
+    # Uses Gemini to generate 3 variations of the user's prompt to maximize recall
+    multi_query_retriever = MultiQueryRetriever.from_llm(
+      retriever=base_retriever,
+      llm=self.llm
+    )
+
+    # LAYER 2: RE-RANKING (Cross-Encoder)
+    # Uses a local BAAI model to read all retrieved chunks and score them accurately
+    print("🧠 Loading Re-ranker Model: BAAI/bge-reranker-base...")
+    cross_encoder_model = HuggingFaceCrossEncoder(model_name=cfg.RERANK_MODEL)
+    
+    # Keep only the top 5 most relevant chunks after re-ranking
+    reranker_compressor = CrossEncoderReranker(model=cross_encoder_model, top_n=5)
+    
+    # LAYER 3: COMBINE
+    # Combines the Multi-Query expansion with the Re-ranking compression
+    advanced_retriever = ContextualCompressionRetriever(
+        base_retriever=multi_query_retriever,
+        base_compressor=reranker_compressor
+    )
+    
+    return advanced_retriever
+    
   def _build_chain(self):
     """Construct the LangChain RAG pipeline."""
     # Prompt Template
@@ -57,7 +93,7 @@ class RAGGeneration:
     question_answer_chain = create_stuff_documents_chain(self.llm, prompt)
 
     # This chain combines the retriever with the question_answer_chain
-    rag_chain = create_retrieval_chain(self.retriever, question_answer_chain)
+    rag_chain = create_retrieval_chain(self.advanced_retriever, question_answer_chain)
     return rag_chain
 
   def answer_question(self, question: str ) -> str:

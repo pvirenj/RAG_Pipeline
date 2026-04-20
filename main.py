@@ -29,7 +29,7 @@ def query_system(collection_name: str, question: str):
   
   # We ONLY initialize what we need for querying
   qdrant_manager = QdrantManager(collection_name)
-  retriever = qdrant_manager.get_retriever()
+  retriever = qdrant_manager.get_retriever(mode="advanced")
   rag_generation = RAGGeneration(retriever)
   
   # Generate answer

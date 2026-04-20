@@ -26,5 +26,9 @@ class Config:
   CHUNK_SIZE = 1000
   CHUNK_OVERLAP = 100
 
+  # Retrieval Settings
+  RETRIEVAL_MODE = "mmr" # default mode
+  RERANK_MODEL = "BAAI/bge-reranker-base"
+
 # Intantiating the config
 cfg = Config()
