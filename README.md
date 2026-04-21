@@ -7,46 +7,53 @@ An end-to-end, production-ready Retrieval-Augmented Generation (RAG) pipeline bu
 ## 🏗️ Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         StudyAI RAG Pipeline                            │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  ┌──────────┐    ┌──────────┐    ┌────────────┐    ┌───────────────┐   │
-│  │  Docling  │───▶│ Chunking │───▶│ Embeddings │───▶│    Qdrant     │   │
-│  │  Parser   │    │ 2-Pass   │    │ Qwen3-VL   │    │  Vector DB    │   │
-│  └──────────┘    └──────────┘    └────────────┘    └───────┬───────┘   │
-│       PDF → Markdown   Markdown → Chunks   Chunks → Vectors    │       │
-│                                                                 │       │
-│                    ╔═══════════════════════════════════╗         │       │
-│                    ║     QUERY PIPELINE (Advanced)     ║         │       │
-│                    ╠═══════════════════════════════════╣         │       │
-│                    ║                                   ║         │       │
-│                    ║  User Question                    ║         │       │
-│                    ║       │                           ║         │       │
-│                    ║       ▼                           ║         │       │
-│                    ║  ┌────────────┐                   ║         │       │
-│                    ║  │Multi-Query │ Gemini rewrites   ║         │       │
-│                    ║  │ Expansion  │ into 3 queries    ║         │       │
-│                    ║  └─────┬──────┘                   ║         │       │
-│                    ║        ▼                           ║         │       │
-│                    ║  ┌────────────┐                   ║         │       │
-│                    ║  │  Qdrant    │ Searches with     ║◀────────┘       │
-│                    ║  │  Search    │ all 3 queries     ║                 │
-│                    ║  └─────┬──────┘ (k=30 chunks)    ║                 │
-│                    ║        ▼                           ║                 │
-│                    ║  ┌────────────┐                   ║                 │
-│                    ║  │BGE Re-rank │ Reads & scores    ║                 │
-│                    ║  │Cross-Encode│ all 30 → top 5   ║                 │
-│                    ║  └─────┬──────┘                   ║                 │
-│                    ║        ▼                           ║                 │
-│                    ║  ┌────────────┐                   ║                 │
-│                    ║  │  Gemini    │ Generates answer  ║                 │
-│                    ║  │ 2.5-Flash  │ with citations    ║                 │
-│                    ║  │ (fallback: │                   ║                 │
-│                    ║  │  1.5-Pro)  │                   ║                 │
-│                    ║  └────────────┘                   ║                 │
-│                    ╚═══════════════════════════════════╝                 │
-└─────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                          StudyAI RAG Pipeline                                │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌──────────────┐     ┌──────────────┐                                      │
+│  │ Streamlit UI  │     │   CLI        │                                      │
+│  │ (future)      │     │  main.py     │                                      │
+│  └──────┬───────┘     └──────┬───────┘                                      │
+│         │                    │                                               │
+│         ▼                    ▼                                               │
+│  ┌──────────────┐     ┌──────────────┐                                      │
+│  │  api/         │     │  Direct      │                                      │
+│  │  FastAPI      │     │  Function    │                                      │
+│  │  server.py    │     │  Calls       │                                      │
+│  │  routes/      │     │              │                                      │
+│  └──────┬───────┘     └──────┬───────┘                                      │
+│         │                    │                                               │
+│         └────────┬───────────┘                                               │
+│                  ▼                                                           │
+│  ┌───────────────────────────────────────────────────────────────────┐       │
+│  │                    src/ (Core Business Logic)                     │       │
+│  │                                                                   │       │
+│  │  INGESTION PIPELINE                                               │       │
+│  │  ┌──────────┐   ┌──────────┐   ┌────────────┐   ┌──────────┐    │       │
+│  │  │ Docling   │──▶│ Chunking │──▶│ Embeddings │──▶│  Qdrant  │    │       │
+│  │  │ Parser    │   │ 2-Pass   │   │ Qwen3-VL   │   │ Vector DB│    │       │
+│  │  └──────────┘   └──────────┘   └────────────┘   └────┬─────┘    │       │
+│  │                                                       │          │       │
+│  │  QUERY PIPELINE (Advanced)                            │          │       │
+│  │  ┌──────────────┐                                     │          │       │
+│  │  │ Multi-Query   │ Gemini rewrites into 3 queries     │          │       │
+│  │  └──────┬───────┘                                     │          │       │
+│  │         ▼                                             │          │       │
+│  │  ┌──────────────┐                                     │          │       │
+│  │  │ Qdrant Search │◀───────────────────────────────────┘          │       │
+│  │  └──────┬───────┘ (k=30 chunks)                                  │       │
+│  │         ▼                                                         │       │
+│  │  ┌──────────────┐                                                 │       │
+│  │  │ BGE Re-ranker │ Cross-encoder reads all 30 → keeps top 5      │       │
+│  │  └──────┬───────┘                                                 │       │
+│  │         ▼                                                         │       │
+│  │  ┌──────────────┐                                                 │       │
+│  │  │ Gemini LLM   │ 2.5-Flash (fallback: 1.5-Pro)                  │       │
+│  │  │ + Citations  │ Generates textbook-style answer                 │       │
+│  │  └──────────────┘                                                 │       │
+│  └───────────────────────────────────────────────────────────────────┘       │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -62,6 +69,7 @@ An end-to-end, production-ready Retrieval-Augmented Generation (RAG) pipeline bu
 | **Retrieval** | MMR / Advanced (Multi-Query + BGE Re-ranking) | Configurable retrieval strategies |
 | **Re-ranker** | `BAAI/bge-reranker-base` (278M params, Local) | Cross-encoder that "reads" chunks for true relevance scoring |
 | **LLM** | Google Gemini 2.5-Flash (Primary) + Gemini 1.5-Pro (Fallback) | Answer generation with automatic graceful degradation |
+| **API Server** | FastAPI + Uvicorn | REST API with auto-generated Swagger docs |
 
 ---
 
@@ -69,14 +77,24 @@ An end-to-end, production-ready Retrieval-Augmented Generation (RAG) pipeline bu
 
 ```
 RAG_Pipeline/
-├── main.py                    # CLI entry point (ingest / query commands)
+├── main.py                    # CLI entry point (ingest / query / serve commands)
 ├── docker-compose.yaml        # Qdrant vector database container
 ├── requirements.txt           # Python dependencies
 ├── pyproject.toml             # UV project configuration
 ├── .env                       # API keys (GEMINI_API_KEY, QDRANT_API_KEY)
 ├── data/                      # PDF textbooks go here
 │   └── *.pdf
-└── src/
+├── api/                       # REST API layer (FastAPI)
+│   ├── __init__.py
+│   ├── server.py              # FastAPI app instance & router registration
+│   ├── models.py              # Pydantic request/response schemas
+│   └── routes/
+│       ├── __init__.py
+│       ├── health.py          # GET  /health
+│       ├── collections.py     # GET  /collections
+│       ├── ingest.py          # POST /ingest
+│       └── query.py           # POST /query
+└── src/                       # Core business logic
     ├── config.py              # Centralized configuration & environment variables
     ├── data_ingestion.py      # PDF → Markdown conversion using Docling
     ├── chunking.py            # 2-pass text splitting with metadata preservation
@@ -101,8 +119,10 @@ Centralizes all settings. Loads API keys from `.env` and defines model names, ch
 | `FALLBACK_MODEL` | `gemini-1.5-pro` | Fallback LLM (on server errors) |
 | `CHUNK_SIZE` | `1000` | Max characters per chunk |
 | `CHUNK_OVERLAP` | `100` | Overlap between adjacent chunks |
-| `RETRIEVAL_MODE` | `mmr` | Default retrieval strategy |
+| `RETRIEVAL_MODE` | `advanced` | Default retrieval strategy |
 | `RERANK_MODEL` | `BAAI/bge-reranker-base` | Cross-encoder re-ranking model |
+| `API_HOST` | `0.0.0.0` | FastAPI server bind address |
+| `API_PORT` | `8000` | FastAPI server port |
 
 ---
 
@@ -139,6 +159,20 @@ The brain of the system. Handles:
    - **Layer 2 — Re-ranking:** `BAAI/bge-reranker-base` cross-encoder reads all retrieved chunks and scores true relevance. Keeps top 5.
    - **Layer 3 — Compression:** `ContextualCompressionRetriever` combines Multi-Query + Re-ranking into a single retriever interface.
 3. **QA Chain:** `create_stuff_documents_chain` injects the top chunks into a carefully crafted system prompt that enforces academic tone, detailed explanations, and source citations.
+
+---
+
+### `api/` — REST API Layer (FastAPI)
+A thin HTTP wrapper around the `src/` modules. No business logic lives here — it only handles HTTP concerns (request parsing, file uploads, error responses).
+
+| File | Endpoint | Method | Description |
+|---|---|---|---|
+| `routes/health.py` | `/health` | `GET` | Pings Qdrant, returns connection status |
+| `routes/collections.py` | `/collections` | `GET` | Lists all knowledge base collections |
+| `routes/ingest.py` | `/ingest` | `POST` | Accepts PDF upload via `multipart/form-data`, runs full ingestion pipeline |
+| `routes/query.py` | `/query` | `POST` | Accepts JSON `{collection, question}`, returns `{answer, sources}` |
+| `models.py` | — | — | Pydantic schemas for request/response validation |
+| `server.py` | — | — | FastAPI app instance, registers all routers |
 
 ---
 
@@ -189,7 +223,7 @@ mkdir -p data
 
 ### Ingest a PDF
 ```bash
-python main.py ingest --file ./data/FundamentalsofDeepLearning.pdf --collection learning_knowledge_base
+python main.py ingest --file ./data/[PDF_FILE_NAME].pdf --collection learning_knowledge_base
 ```
 
 **What happens:**
@@ -265,6 +299,52 @@ User Question: "Explain how backpropagation works"
 
 ---
 
+## 🌐 API Usage
+
+### Start the API Server
+```bash
+python main.py serve
+```
+Swagger UI available at: **http://localhost:8000/docs**
+
+### Health Check
+```bash
+curl http://localhost:8000/health
+```
+```json
+{"status": "healthy", "qdrant": "connected"}
+```
+
+### List Collections
+```bash
+curl http://localhost:8000/collections
+```
+```json
+{"collections": [{"name": "learning_knowledge_base"}]}
+```
+
+### Ingest a PDF via API
+```bash
+curl -X POST http://localhost:8000/ingest \
+  -F "collection=learning_knowledge_base" \
+  -F "file=@./data/[PDF_FILE_NAME].pdf"
+```
+```json
+{"status": "success", "filename": "[PDF_FILE_NAME].pdf", "collection": "learning_knowledge_base", "chunks_stored": 758}
+```
+
+### Query via API
+```bash
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"collection": "learning_knowledge_base", "question": "What is backpropagation?"}'
+```
+```json
+{"answer": "Backpropagation is...", "sources": ["Training Feed-Forward Neural Networks", "Implementing Backpropagation"]}
+```
+
+---
+
 ## 🔀 Retrieval Modes
 
 | Mode | Strategy | Speed | Accuracy | Use Case |
@@ -302,7 +382,8 @@ Qdrant payload indexes on `metadata.Header_1` and `metadata.source` enable fast 
 
 ## 🗺️ Roadmap
 
-- [ ] **FastAPI Server** — REST API endpoints for ingest, query, and collection management
+- [x] **FastAPI Server** — REST API endpoints for ingest, query, and collection management
+- [ ] **Streamlit UI** — Web interface for document upload and interactive Q&A
 - [ ] **Multi-Modal Ingestion** — Support `.docx`, `.xlsx`, and web URL scraping via Docling
 - [ ] **Hybrid Search** — Dense + BM25 sparse vectors for exact keyword matching
 - [ ] **Streaming Responses** — Stream LLM output token-by-token via SSE

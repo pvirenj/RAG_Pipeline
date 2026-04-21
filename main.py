@@ -4,6 +4,8 @@ from src.data_ingestion import DataIngestion
 from src.chunking import Chunking
 from src.vector_embeddings import QdrantManager
 from src.generation import RAGGeneration
+import uvicorn
+from src.config import cfg
 
 def ingest_data(pdf_path: str, collection_name: str):
   """Handles the heavy lifting: Parsing, Chunking and Storing."""
@@ -53,11 +55,18 @@ if __name__ == "__main__":
     query_parser.add_argument("--collection", type=str, default="learning_knowledge_base", required=True, help="Name of the Qdrant collection")
     query_parser.add_argument("--question", type=str, required=True, help="Your question in quotes")
 
+    # 3. Setup the 'serve' command
+    serve_parser = subparsers.add_parser("serve", help="Start the FastAPI server")
+
     # Parse the arguments
     args = parser.parse_args()
-
+    
     # Route to the correct function
     if args.command == "ingest":
       ingest_data(args.file, args.collection)
     elif args.command == "query":
       query_system(args.collection, args.question)
+    elif args.command == "serve":
+        print(f"\n🚀 Starting StudyAI API Server on http://{cfg.API_HOST}:{cfg.API_PORT}")
+        print(f"📖 Swagger docs: http://localhost:{cfg.API_PORT}/docs\n")
+        uvicorn.run("api.server:app", host=cfg.API_HOST, port=cfg.API_PORT, reload=True)

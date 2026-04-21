@@ -30,5 +30,9 @@ class Config:
   RETRIEVAL_MODE = "advanced" # default mode
   RERANK_MODEL = "BAAI/bge-reranker-base"
 
+  # API Server
+  API_HOST = "0.0.0.0"
+  API_PORT = 8000
+
 # Intantiating the config
 cfg = Config()
